@@ -1,0 +1,46 @@
+services:
+  discovery-service:
+    build: ./discovery-service
+    ports:
+      - "8761:8761"
+    networks:
+      - msa-network
+
+  user-service:
+    build: ./user-service
+    expose:
+      - "3001"
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-service:8761/eureka/
+    depends_on:
+      - discovery-service
+    networks:
+      - msa-network
+
+  order-service:
+    build: ./order-service
+    expose:
+      - "3002"
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-service:8761/eureka/
+    depends_on:
+      - discovery-service
+    networks:
+      - msa-network
+
+  api-gateway:
+    build: ./gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-service:8761/eureka/
+    depends_on:
+      - discovery-service
+      - user-service
+      - order-service
+    networks:
+      - msa-network
+
+networks:
+  msa-network:
+    driver: bridge

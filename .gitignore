@@ -1,0 +1,23 @@
+# Gradle build artifacts
+.gradle/
+build/
+*/build/
+*/.gradle/
+
+# Maven build artifacts
+target/
+*/target/
+
+# IDE settings
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Log files
+*.log
+
+# System files
+.DS_Store
+Thumbs.db
