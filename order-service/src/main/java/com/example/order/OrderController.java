@@ -26,7 +26,9 @@ public class OrderController {
         List<Map<String, Object>> enrichedOrders = rawOrders.stream().map(order -> {
             Map<String, Object> enriched = new HashMap<>(order);
             Long userId = (Long) order.get("userId");
-            // user-service 장애 시 자동으로 UserClientFallback.getUserById()가 실행됨
+            // user-service 호출: user-service 가 정상 작동 중일 때는 실제 회원 이름을 가져옵니다.
+            // 만약 user-service 장애(다운, 시간 초과 등) 발생 시, 지정한 UserClientFallback.getUserById() 가 
+            // 자동으로 실행되어 안전하게 대체 데이터("🚨 서비스 일시 불가 ...")를 반환합니다.
             Map<String, Object> user = userClient.getUserById(userId);
             enriched.put("userName", user.get("name"));
             return enriched;
