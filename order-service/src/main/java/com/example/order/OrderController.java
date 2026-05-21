@@ -26,12 +26,9 @@ public class OrderController {
         List<Map<String, Object>> enrichedOrders = rawOrders.stream().map(order -> {
             Map<String, Object> enriched = new HashMap<>(order);
             Long userId = (Long) order.get("userId");
-            try {
-                Map<String, Object> user = userClient.getUserById(userId);
-                enriched.put("userName", user.get("name"));
-            } catch (Exception e) {
-                enriched.put("userName", "Error fetching user");
-            }
+            // user-service 장애 시 자동으로 UserClientFallback.getUserById()가 실행됨
+            Map<String, Object> user = userClient.getUserById(userId);
+            enriched.put("userName", user.get("name"));
             return enriched;
         }).toList();
 
