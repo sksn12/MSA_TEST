@@ -8,32 +8,29 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 @RestController
 public class OrderController {
 
     private final UserClient userClient;
     private final OrderProducer orderProducer;
-    
-    // Thread-safe dynamic in-memory database for orders
-    private final List<Map<String, Object>> ordersList = new CopyOnWriteArrayList<>(List.of(
-        Map.of("orderId", 101L, "item", "Laptop", "userId", 1L),
-        Map.of("orderId", 102L, "item", "Mouse", "userId", 2L)
-    ));
+    private final OrderRepository orderRepository;
 
-    public OrderController(UserClient userClient, OrderProducer orderProducer) {
+    public OrderController(UserClient userClient, OrderProducer orderProducer, OrderRepository orderRepository) {
         this.userClient = userClient;
         this.orderProducer = orderProducer;
+        this.orderRepository = orderRepository;
     }
 
     @GetMapping("/orders")
     public Map<String, Object> getOrders() {
-        List<Map<String, Object>> enrichedOrders = ordersList.stream().map(order -> {
-            Map<String, Object> enriched = new HashMap<>(order);
-            Long userId = Long.valueOf(order.get("userId").toString());
+        List<Map<String, Object>> enrichedOrders = orderRepository.findAll().stream().map(order -> {
+            Map<String, Object> enriched = new HashMap<>();
+            enriched.put("orderId", order.getOrderId());
+            enriched.put("item", order.getItem());
+            enriched.put("userId", order.getUserId());
             // user-service 호출 및 서킷 브레이커 대체값 동작
-            Map<String, Object> user = userClient.getUserById(userId);
+            Map<String, Object> user = userClient.getUserById(order.getUserId());
             enriched.put("userName", user.get("name"));
             return enriched;
         }).toList();
@@ -50,20 +47,21 @@ public class OrderController {
         Long userId = Long.valueOf(request.get("userId").toString());
         String item = request.get("item").toString();
         
-        long newOrderId = ordersList.size() + 101L; // Simple ID generation logic
-        Map<String, Object> newOrder = Map.of(
-            "orderId", newOrderId,
-            "item", item,
-            "userId", userId
+        OrderEntity orderEntity = new OrderEntity(item, userId);
+        OrderEntity savedOrder = orderRepository.save(orderEntity);
+
+        Map<String, Object> orderEvent = Map.of(
+            "orderId", savedOrder.getOrderId(),
+            "item", savedOrder.getItem(),
+            "userId", savedOrder.getUserId()
         );
-        ordersList.add(newOrder);
 
         // Kafka로 주문 이벤트 비동기 발행
-        orderProducer.sendOrderEvent(newOrder);
+        orderProducer.sendOrderEvent(orderEvent);
 
         return Map.of(
             "message", "주문이 성공적으로 생성되었습니다.",
-            "order", newOrder
+            "order", orderEvent
         );
     }
 }

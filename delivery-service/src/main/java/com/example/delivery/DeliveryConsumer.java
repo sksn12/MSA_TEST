@@ -5,13 +5,15 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.HashMap;
 
 @Service
 public class DeliveryConsumer {
 
-    private final List<Map<String, Object>> deliveries = new CopyOnWriteArrayList<>();
+    private final DeliveryRepository deliveryRepository;
+
+    public DeliveryConsumer(DeliveryRepository deliveryRepository) {
+        this.deliveryRepository = deliveryRepository;
+    }
 
     @KafkaListener(topics = "order-topic", groupId = "delivery-group")
     public void consumeOrderEvent(Map<String, Object> orderData) {
@@ -21,18 +23,17 @@ public class DeliveryConsumer {
         System.out.println("👉 배송 준비를 시작합니다 (주문 ID: " + orderData.get("orderId") + ", 상품명: " + orderData.get("item") + ")");
         System.out.println("=========================================");
 
+        Long orderId = Long.valueOf(orderData.get("orderId").toString());
+        String item = orderData.get("item").toString();
+        Long userId = Long.valueOf(orderData.get("userId").toString());
+
         // Create a new delivery record with status and timestamp
-        Map<String, Object> delivery = new HashMap<>();
-        delivery.put("orderId", orderData.get("orderId"));
-        delivery.put("item", orderData.get("item"));
-        delivery.put("userId", orderData.get("userId"));
-        delivery.put("status", "PREPARING"); // 배송 준비 중
-        delivery.put("timestamp", System.currentTimeMillis());
-        deliveries.add(delivery);
+        Delivery delivery = new Delivery(orderId, item, userId, "PREPARING", System.currentTimeMillis());
+        deliveryRepository.save(delivery);
     }
 
-    public List<Map<String, Object>> getDeliveries() {
-        return deliveries;
+    public List<Delivery> getDeliveries() {
+        return deliveryRepository.findAll();
     }
 }
 
