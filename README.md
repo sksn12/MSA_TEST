@@ -288,3 +288,64 @@ public class DeliveryConsumer {
    ▼ ⑤ 폴링(Pull)하여 메시지 수신 및 배송 로직 비동기 실행
 [Delivery Service (3003)]
 ```
+
+---
+
+## **8. 마이크로서비스 기동 순서 가이드 (Service Startup Order Guide)**
+
+로컬 환경에서 전체 MSA 애플리케이션을 기동할 때, 서비스 간 의존성(설정 가져오기, 유레카 등록 등) 때문에 구동 순서가 매우 중요합니다. 아래 순서대로 기동하는 것을 권장합니다.
+
+1. **인프라 서비스 구동 (Docker)**
+   - Kafka, MariaDB, Zookeeper 등 공통 인프라를 먼저 실행합니다.
+   - 예: `docker-compose up -d zookeeper kafka` 혹은 로컬 데이터베이스 서비스를 구동합니다.
+2. **`config-service` (포트 `8888`) 기동**
+   - 각 마이크로서비스가 실행되면서 중앙 설정 정보를 먼저 읽어야 하므로, 가장 먼저 구동을 완료해야 합니다.
+3. **`discovery-service` (포트 `8761`) 기동**
+   - 유레카 서버가 실행되어 활성화 상태여야 다른 서비스들이 기동될 때 자신의 네트워크 주소를 등록(Registration)할 수 있습니다.
+4. **개별 마이크로서비스 및 API Gateway 기동**
+   - 아래 순서로 마이크로서비스를 실행합니다.
+     - `user-service` (3001)
+     - `order-service` (3002)
+     - `delivery-service` (3003)
+     - `api-gateway` (8080)
+
+---
+
+## **9. 데이터베이스 구성 및 트러블슈팅 (Database Configuration & Troubleshooting)**
+
+각 마이크로서비스는 **Database-per-Service** 패턴을 준수하여 각각 독립된 데이터베이스 스키마를 사용합니다.
+
+| **마이크로서비스** | **연동 데이터베이스** | **기본 포트** |
+| --- | --- | --- |
+| **user-service** | `user_db` | `3306` |
+| **order-service** | `order_db` | `3306` |
+| **delivery-service** | `delivery_db` | `3306` |
+
+### **🚨 트러블슈팅: 한글 데이터 입력 시 `Incorrect string value` 에러**
+
+주문 시 한글 상품명("지포" 등)을 저장하거나 한글 사용자 정보를 가입시킬 때 아래와 같은 예외가 발생할 수 있습니다.
+
+> `java.sql.SQLSyntaxErrorException: (conn=18) Incorrect string value: '\xEC\xA7\x80...' for column 'item' at row 1`
+
+#### **💡 원인**
+Spring Boot의 `createDatabaseIfNotExist=true` 옵션에 의해 처음 데이터베이스가 자동 생성될 때, 로컬 MariaDB/MySQL 서버의 기본 캐릭터 셋(예: `latin1`)으로 생성되어 다국어(UTF-8) 문자를 표현하지 못해 생기는 문제입니다.
+
+#### **🛠️ 해결 방법 (SQL 명령 실행)**
+데이터베이스 관리 툴(HeidiSQL, DBeaver 등)이나 MariaDB CLI로 접속하여 각 데이터베이스와 테이블의 캐릭터 셋을 `utf8mb4`로 명시적 변경합니다.
+
+```sql
+-- 1. 각 데이터베이스의 기본 캐릭터 셋을 utf8mb4로 변경
+ALTER DATABASE order_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+ALTER DATABASE user_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+ALTER DATABASE delivery_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- 2. 이미 생성된 테이블(예: orders)의 문자셋 일괄 변환
+ALTER TABLE order_db.orders CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+#### **🔗 JDBC URL 문자 인코딩 설정 추가**
+추가적으로 `config-repo` 내의 설정 파일들에서 JDBC 연결 문자열 뒤에 한글 인코딩 설정을 보강하면 더 안전하게 연동할 수 있습니다.
+* 예시: `&useUnicode=true&characterEncoding=utf-8` 추가
+```yaml
+url: jdbc:mariadb://localhost:3306/order_db?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf-8
+```
