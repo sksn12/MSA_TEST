@@ -1,5 +1,9 @@
-package com.example.order;
+package com.example.order.controller;
 
+import com.example.order.client.UserClient;
+import com.example.order.entity.OrderEntity;
+import com.example.order.producer.OrderProducer;
+import com.example.order.repository.OrderRepository;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

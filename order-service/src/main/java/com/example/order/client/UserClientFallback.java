@@ -1,4 +1,4 @@
-package com.example.order;
+package com.example.order.client;
 
 import org.springframework.stereotype.Component;
 

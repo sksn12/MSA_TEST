@@ -1,4 +1,6 @@
-package com.example.delivery;
+package com.example.delivery.controller;
+
+import com.example.delivery.consumer.DeliveryConsumer;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;

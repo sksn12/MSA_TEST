@@ -1,5 +1,7 @@
-package com.example.user;
+package com.example.user.controller;
 
+import com.example.user.entity.User;
+import com.example.user.repository.UserRepository;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;

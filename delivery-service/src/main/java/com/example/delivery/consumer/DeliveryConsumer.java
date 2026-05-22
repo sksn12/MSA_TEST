@@ -1,4 +1,7 @@
-package com.example.delivery;
+package com.example.delivery.consumer;
+
+import com.example.delivery.entity.Delivery;
+import com.example.delivery.repository.DeliveryRepository;
 
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
