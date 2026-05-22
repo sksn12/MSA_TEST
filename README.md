@@ -209,7 +209,7 @@ sequenceDiagram
 ### **💻 핵심 소스 코드**
 
 ### **① Kafka Producer 설정 및 이벤트 발행 (`order-service`)**
-- [OrderProducer.java](file:///c:/Users/KOSA/Desktop/msa-step1/order-service/src/main/java/com/example/order/OrderProducer.java)
+- [OrderProducer.java](file:///c:/Users/KOSA/Desktop/msa-step1/backend/order-service/src/main/java/com/example/order/OrderProducer.java)
 
 ```java
 @Service
@@ -229,7 +229,7 @@ public class OrderProducer {
 ```
 
 ### **② Kafka Consumer 설정 및 이벤트 구독 (`delivery-service`)**
-- [DeliveryConsumer.java](file:///c:/Users/KOSA/Desktop/msa-step1/delivery-service/src/main/java/com/example/delivery/DeliveryConsumer.java)
+- [DeliveryConsumer.java](file:///c:/Users/KOSA/Desktop/msa-step1/backend/delivery-service/src/main/java/com/example/delivery/DeliveryConsumer.java)
 
 ```java
 @Service
@@ -296,8 +296,8 @@ public class DeliveryConsumer {
 로컬 환경에서 전체 MSA 애플리케이션을 기동할 때, 서비스 간 의존성(설정 가져오기, 유레카 등록 등) 때문에 구동 순서가 매우 중요합니다. 아래 순서대로 기동하는 것을 권장합니다.
 
 1. **인프라 서비스 구동 (Docker)**
-   - Kafka, MariaDB, Zookeeper 등 공통 인프라를 먼저 실행합니다.
-   - 예: `docker-compose up -d zookeeper kafka` 혹은 로컬 데이터베이스 서비스를 구동합니다.
+   - **`backend` 디렉토리로 이동**한 뒤 Kafka, MariaDB, Zookeeper 등 공통 인프라를 실행합니다.
+   - 예: `cd backend` 후 `docker-compose up -d zookeeper kafka` 혹은 로컬 데이터베이스 서비스를 구동합니다.
 2. **`config-service` (포트 `8888`) 기동**
    - 각 마이크로서비스가 실행되면서 중앙 설정 정보를 먼저 읽어야 하므로, 가장 먼저 구동을 완료해야 합니다.
 3. **`discovery-service` (포트 `8761`) 기동**
@@ -349,3 +349,59 @@ ALTER TABLE order_db.orders CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_uni
 ```yaml
 url: jdbc:mariadb://localhost:3306/order_db?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf-8
 ```
+
+---
+
+## **10. 공통 모듈 (`common`) 도입 및 JPA 로깅 필터 설정**
+
+각 마이크로서비스(`user-service`, `order-service`, `delivery-service`)에 흩어져 있던 중복 공통 코드와 로깅 필터를 단일 모듈인 `common`으로 통합하여 유지보수성을 극대화하였습니다.
+
+### **🛠️ Gradle Composite Build 적용**
+모든 하위 서비스가 동일한 `backend` 폴더 내에 위치한 `common` 모듈을 참조하도록 각 서비스의 `settings.gradle`에 다음과 같이 Composite Build 설정을 추가하였습니다.
+```groovy
+// settings.gradle
+includeBuild '../common'
+```
+그리고 각 서비스의 `build.gradle`에서 의존성을 주입받아 사용합니다.
+```groovy
+// build.gradle
+implementation 'com.example:common'
+```
+
+### **📦 주요 제공 컴포넌트**
+1. **JPA `SELECT` 로그 필터 (`SqlSelectFilter.java` & `logback-common.xml`)**
+   - 개발 및 운영 단계에서 과도하게 발생하는 JPA `SELECT` 쿼리 콘솔 로그를 제외 처리하여 로그 가독성을 높였습니다. `INSERT`, `UPDATE`, `DELETE` 등의 CUD 로그는 정상 기록됩니다.
+2. **`BaseEntity`**
+   - 모든 엔티티의 공통 관심사인 등록일(`createdAt`) 및 수정일(`updatedAt`)을 `MappedSuperclass`로 공통화하였습니다.
+3. **`ApiResponse`**
+   - 일관성 있는 API JSON 응답 포맷을 구조화하여 프론트엔드 연동을 용이하게 합니다.
+4. **`GlobalExceptionHandler`**
+   - 각 마이크로서비스에서 발생하는 다양한 런타임 예외를 일관된 형식의 에러 응답으로 리턴하도록 전역 처리합니다.
+
+---
+
+## **11. 독립 프론트엔드 (`frontend`) 구축 및 구동 가이드**
+
+기존 API Gateway 내부 static 경로(`backend/gateway/src/main/resources/static/index.html`)에 속해 있어 결합도가 높고 유지보수가 어려웠던 대시보드 화면을 **독립형 React (Vite)** 프로젝트로 완전히 분리하였습니다.
+
+### **⚙️ 아키텍처 및 CORS Proxy 우회**
+브라우저의 CORS(Cross-Origin Resource Sharing) 이슈를 방지하고 외부 노출 포트를 게이트웨이 하나로 단순화하기 위해, Vite 개발 서버의 Proxy 설정을 적용했습니다.
+* 프론트엔드(포트 `5173`)에서 `/users`, `/orders`, `/deliveries`로 가는 요청은 내부적으로 API Gateway(포트 `8080`)로 프록시 처리됩니다.
+
+### **🏃‍♂️ 실행 방법 (로컬 기동)**
+1. **프론트엔드 디렉토리 이동**:
+   ```bash
+   cd frontend
+   ```
+2. **의존성 설치 (필요시)**:
+   ```bash
+   npm.cmd install
+   ```
+3. **Vite 개발 서버 구동**:
+   ```bash
+   npm.cmd run dev
+   ```
+   * *참고: Windows PowerShell 환경의 보안 정책(ExecutionPolicy)으로 인해 `npm` 호출 시 에러가 날 경우 `npm.cmd` 확장자를 붙여 호출하면 정상 동작합니다.*
+4. **대시보드 접속**:
+   * 브라우저에서 `http://localhost:5173` 으로 접속합니다.
+
