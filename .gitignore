@@ -21,3 +21,8 @@ target/
 # System files
 .DS_Store
 Thumbs.db
+
+# JDK
+.jdk21/
+.jdk/
+
