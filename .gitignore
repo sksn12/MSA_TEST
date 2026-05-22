@@ -26,3 +26,5 @@ Thumbs.db
 .jdk21/
 .jdk/
 
+# bin 
+bin/

@@ -8,6 +8,7 @@ spring:
     active: native
   cloud:
     config:
+      enabled: false
       server:
         native:
           # 지원할 여러 경로 (도커 마운트 경로, 모듈 단위 실행 경로, 루트 실행 경로 등)
