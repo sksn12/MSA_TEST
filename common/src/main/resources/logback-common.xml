@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<included>
+    <!-- 스프링 부트의 기본 로그 패턴과 환경변수 설정을 로드합니다. -->
+    <include resource="org/springframework/boot/logging/logback/defaults.xml" />
+
+    <!-- 커스텀 콘솔 어펜더 정의 (select 쿼리 필터 추가) -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${CONSOLE_LOG_PATTERN}</pattern>
+            <charset>${CONSOLE_LOG_CHARSET}</charset>
+        </encoder>
+        <!-- com.example.common 패키지의 필터 적용 -->
+        <filter class="com.example.common.logging.SqlSelectFilter" />
+    </appender>
+
+    <!-- 루트 로거 및 콘솔 어펜더 매핑 -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE" />
+    </root>
+
+    <!-- SQL 쿼리 로깅 레벨 설정 -->
+    <logger name="org.hibernate.SQL" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE" />
+    </logger>
+</included>
