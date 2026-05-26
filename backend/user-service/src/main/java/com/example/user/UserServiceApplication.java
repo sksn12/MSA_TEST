@@ -14,12 +14,12 @@ public class UserServiceApplication {
     }
 
     @Bean
-    public CommandLineRunner initData(UserRepository userRepository) {
+    public CommandLineRunner initData(UserRepository userRepository, org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder passwordEncoder) {
         return args -> {
             if (userRepository.count() == 0) {
-                userRepository.save(new User("Alice"));
-                userRepository.save(new User("Bob"));
-                System.out.println("🌱 Initialized mock users (Alice, Bob) in user_db database!");
+                userRepository.save(new User("Alice", "alice@example.com", passwordEncoder.encode("password123"), "ROLE_USER"));
+                userRepository.save(new User("Bob", "bob@example.com", passwordEncoder.encode("password123"), "ROLE_USER"));
+                System.out.println("🌱 Initialized mock users (Alice, Bob) with encrypted passwords in user_db database!");
             }
         };
     }

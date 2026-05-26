@@ -405,3 +405,96 @@ implementation 'com.example:common'
 4. **대시보드 접속**:
    * 브라우저에서 `http://localhost:5173` 으로 접속합니다.
 
+---
+
+## **12. JWT 기반 통합 인증 및 인가 (Gateway Security)**
+
+보안과 트래픽 인가 관리를 위해 독립된 **인증 서비스 (`auth-service`)**를 추가하고, API Gateway가 모든 진입점에서 JWT 토큰을 검증하는 **Gateway Security 아키텍처**를 구축했습니다.
+
+### **🔄 인증 및 인가 시나리오 흐름**
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as 사용자 (프론트엔드)
+    participant GW as API Gateway (8080)
+    participant Auth as Auth Service (3004)
+    participant User as User Service (3001)
+    participant Order as Order Service (3002)
+
+    Note over Client, Auth: ① 로그인 및 JWT 발급
+    Client->>GW: POST /auth/login (email, password)
+    GW->>Auth: 라우팅 (POST /auth/login)
+    Auth->>User: OpenFeign 동기 호출 (GET /users/by-email)
+    User-->>Auth: 암호화된 비밀번호 & 유저 역할 반환
+    Auth->>Auth: BCrypt 비밀번호 검증 및 JWT 토큰 생성
+    Auth-->>Client: 토큰 반환 (Authorization: Bearer <JWT>)
+
+    Note over Client, Order: ② 인가(Authorization) 및 API 호출
+    Client->>GW: POST /orders (Headers: Authorization: Bearer <JWT>, Body: item)
+    GW->>GW: JwtAuthenticationFilter 작동 (서명 검증)
+    Note over GW: 토큰 파싱 후 Claims 추출<br/>(userId, role, email)
+    GW->>Order: X-User-Id, X-User-Role 헤더 주입 및 라우팅
+    Order->>Order: X-User-Id 헤더를 신뢰하여 주문 생성 완료
+    Order-->>Client: 200 OK
+```
+
+### **💻 핵심 설계 및 소스 코드**
+
+### **① Gateway JWT 필터 (`gateway-service`)**
+- `JwtAuthenticationFilterGatewayFilterFactory.java`
+- Gateway로 들어오는 모든 요청의 `Authorization` 헤더에서 JWT를 검증합니다.
+- 검증에 성공하면 JWT 내부의 Claims(`userId`, `role`, `email`, `name`)를 HTTP 헤더(`X-User-Id`, `X-User-Role`, `X-User-Email`, `X-User-Name`)에 주입(Mutate)하여 다운스트림 서비스로 전파합니다.
+
+```java
+@Component
+public class JwtAuthenticationFilterGatewayFilterFactory extends AbstractGatewayFilterFactory<JwtAuthenticationFilterGatewayFilterFactory.Config> {
+    // ... 생략 ...
+    @Override
+    public GatewayFilter apply(Config config) {
+        return (exchange, chain) -> {
+            ServerHttpRequest request = exchange.getRequest();
+            if (!request.getHeaders().containsKey(HttpHeaders.AUTHORIZATION)) {
+                return onError(exchange, "No Authorization Header", HttpStatus.UNAUTHORIZED);
+            }
+            String token = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION).substring(7);
+            try {
+                Claims claims = parseJwt(token); // 서명 검증 및 파싱
+                ServerHttpRequest mutatedRequest = request.mutate()
+                        .header("X-User-Id", (String) claims.get("userId"))
+                        .header("X-User-Role", (String) claims.get("role"))
+                        .header("X-User-Email", claims.getSubject())
+                        .build();
+                return chain.filter(exchange.mutate().request(mutatedRequest).build());
+            } catch (Exception e) {
+                return onError(exchange, "JWT validation failed", HttpStatus.UNAUTHORIZED);
+            }
+        };
+    }
+}
+```
+
+### **② 인증 정보 전파 및 수신 (`order-service`)**
+- 하위 서비스들은 자체적으로 복잡한 JWT 검증을 거치지 않고, Gateway가 전파해 준 `X-User-Id` 헤더를 통해 사용자를 신뢰하고 식별합니다.
+- `OrderController.java`
+```java
+@PostMapping("/orders")
+public Map<String, Object> createOrder(
+    @RequestHeader(value = "X-User-Id", required = false) String xUserId,
+    @RequestBody Map<String, Object> request
+) {
+    Long userId = (xUserId != null && !xUserId.isEmpty()) 
+                  ? Long.valueOf(xUserId) 
+                  : Long.valueOf(request.get("userId").toString()); // Fallback 지원
+    // ... 주문 생성 및 이벤트 발행 ...
+}
+```
+
+### **🔐 주요 보안 특징**
+1. **중앙 집중형 인증/인가 검증 (Gateway Security)**:
+   - 외부망에 노출된 Gateway에서 통합적으로 JWT 검증을 처리하므로, 개별 마이크로서비스 내부 로직이 단순해지고 보안 일관성을 유지할 수 있습니다.
+2. **비밀번호 단방향 해싱 (BCrypt)**:
+   - `user-service`에서 회원가입 시 비밀번호를 `BCryptPasswordEncoder`로 암호화하여 데이터베이스에 안전하게 보관합니다.
+3. **무상태(Stateless) 토큰 세션**:
+   - 세션 저장소가 필요 없는 JWT 방식의 특성을 살려 서비스 수평 확장에 유리합니다.
+

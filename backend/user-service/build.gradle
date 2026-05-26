@@ -22,6 +22,7 @@ ext {
 }
 
 dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'com.example:common:0.0.1-SNAPSHOT'
     runtimeOnly 'org.mariadb.jdbc:mariadb-java-client'
     implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'

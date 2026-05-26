@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 
 function App() {
   const [services, setServices] = useState({
+    auth: 'offline',
     user: 'offline',
     order: 'offline',
     delivery: 'offline'
@@ -19,6 +20,20 @@ function App() {
   const [userId, setUserId] = useState('1');
   const [item, setItem] = useState('지포스 RTX 5090');
   const [loading, setLoading] = useState(false);
+
+  // JWT & Authentication States
+  const [token, setToken] = useState(localStorage.getItem('token') || '');
+  const [user, setUser] = useState(() => {
+    try {
+      const savedUser = localStorage.getItem('user');
+      return savedUser ? JSON.parse(savedUser) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+  const [email, setEmail] = useState('alice@example.com');
+  const [password, setPassword] = useState('password123');
+  const [loginLoading, setLoginLoading] = useState(false);
 
   // Animation active states
   const [activeNodes, setActiveNodes] = useState({
@@ -137,31 +152,85 @@ function App() {
   // Fetch API Health & Data
   const checkHealth = async (url) => {
     try {
-      const res = await fetch(url);
-      if (res.ok) {
-        return 'online';
-      }
+      await fetch(url);
+      // Any response from server (even 401 Unauthorized) means the service is online!
+      return 'online';
     } catch (e) { }
     return 'offline';
   };
 
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    if (!email.trim() || !password.trim()) return;
+
+    setLoginLoading(true);
+    addLog('HTTP', `로그인 시도 (POST /auth/login) - email: ${email}`, 'post');
+    try {
+      const res = await fetch('/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setToken(data.token);
+        setUser(data.user);
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        addLog('AUTH', `🔑 로그인 성공! JWT 발급 완료. 환영합니다, ${data.user.name}님!`, 'info');
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        addLog('ERROR', `로그인 실패: ${errData.message || '이메일 또는 비밀번호가 틀렸습니다.'}`, 'error');
+      }
+    } catch (e) {
+      addLog('ERROR', `로그인 네트워크 에러: ${e.message}`, 'error');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    setToken('');
+    setUser(null);
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    addLog('AUTH', `🔓 로그아웃 되었습니다.`, 'info');
+  };
+
   const fetchData = async () => {
+    const statusAuth = await checkHealth('/auth/login');
     const statusUser = await checkHealth('/users');
     const statusOrder = await checkHealth('/orders');
     const statusDelivery = await checkHealth('/deliveries');
 
     setServices({
+      auth: statusAuth,
       user: statusUser,
       order: statusOrder,
       delivery: statusDelivery
     });
 
+    const currentToken = localStorage.getItem('token');
+    if (!currentToken) {
+      setOrders([]);
+      setDeliveries([]);
+      return;
+    }
+
+    const headers = { 'Authorization': `Bearer ${currentToken}` };
+
     // Render Orders list
     if (statusOrder === 'online') {
       try {
-        const res = await fetch('/orders');
-        const data = await res.json();
-        setOrders(data.orders || []);
+        const res = await fetch('/orders', { headers });
+        if (res.ok) {
+          const data = await res.json();
+          setOrders(data.orders || []);
+        } else if (res.status === 401) {
+          handleLogout();
+          addLog('ERROR', '인증 세션이 만료되어 로그아웃되었습니다.', 'error');
+        }
       } catch (e) {
         addLog('ERROR', '주문 목록 파싱 에러: ' + e.message, 'error');
       }
@@ -172,9 +241,11 @@ function App() {
     // Render Deliveries list
     if (statusDelivery === 'online') {
       try {
-        const res = await fetch('/deliveries');
-        const data = await res.json();
-        setDeliveries(data.deliveries || []);
+        const res = await fetch('/deliveries', { headers });
+        if (res.ok) {
+          const data = await res.json();
+          setDeliveries(data.deliveries || []);
+        }
       } catch (e) {
         addLog('ERROR', '배송 목록 파싱 에러: ' + e.message, 'error');
       }
@@ -241,16 +312,23 @@ function App() {
     if (!item.trim()) return;
 
     setLoading(true);
-    const selectedUserId = parseInt(userId);
+    const selectedUserId = user ? user.id : parseInt(userId);
 
     try {
       // Start flow animation
       triggerFlowAnimation(selectedUserId);
-      addLog('HTTP', `POST /orders (userId: ${selectedUserId}, item: "${item}") 전송 시작...`, 'post');
+      
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+        addLog('HTTP', `POST /orders (JWT 토큰 전송 - ID: ${selectedUserId}, item: "${item}") 전송 시작...`, 'post');
+      } else {
+        addLog('HTTP', `POST /orders (토큰 미전송 - ID: ${selectedUserId}, item: "${item}") 전송 시작...`, 'post');
+      }
 
       const response = await fetch('/orders', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ userId: selectedUserId, item })
       });
 
@@ -265,7 +343,7 @@ function App() {
         }, 1200);
 
       } else {
-        addLog('ERROR', `주문 생성 실패 (HTTP ${response.status})`, 'error');
+        addLog('ERROR', `🔒 주문 생성 실패 (HTTP ${response.status} - ${response.status === 401 ? 'Gateway에서 인증 거부됨' : '에러 발생'})`, 'error');
       }
     } catch (error) {
       addLog('ERROR', `네트워크 에러: ${error.message}`, 'error');
@@ -299,9 +377,18 @@ function App() {
               <div className="status-item">
                 <div className="service-info">
                   <span className="service-name">Gateway</span>
-                  <span class="service-port">8080</span>
+                  <span className="service-port">8080</span>
                 </div>
                 <div className="status-badge online"><span className="status-dot"></span>Online</div>
+              </div>
+              <div className="status-item">
+                <div className="service-info">
+                  <span className="service-name">Auth Service</span>
+                  <span className="service-port">3004</span>
+                </div>
+                <div className={`status-badge ${services.auth === 'online' ? 'online' : 'offline'}`}>
+                  <span className="status-dot"></span>{services.auth === 'online' ? 'Online' : 'Offline'}
+                </div>
               </div>
               <div className="status-item">
                 <div className="service-info">
@@ -335,16 +422,63 @@ function App() {
 
           <div>
             <div className="panel-header">
+              <div className="panel-title">🔑 JWT 통합 인증 로그인</div>
+            </div>
+            {user ? (
+              <div style={{ padding: '12px', background: 'rgba(0, 242, 254, 0.05)', borderRadius: '6px', border: '1px solid rgba(0, 242, 254, 0.2)', marginBottom: '15px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ color: 'var(--accent-cyan)', fontWeight: 'bold' }}>👤 {user.name} 님 로그인 중</span>
+                  <span className="card-badge" style={{ background: 'rgba(0, 242, 254, 0.2)', color: '#fff', fontSize: '0.7rem' }}>{user.role}</span>
+                </div>
+                <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.7)', marginBottom: '12px', wordBreak: 'break-all' }}>이메일: {user.email}</div>
+                <button onClick={handleLogout} className="submit-btn" style={{ background: 'linear-gradient(135deg, #f35555 0%, #d32f2f 100%)', marginTop: '0', cursor: 'pointer' }}>
+                  🔓 로그아웃
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '15px', padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button type="button" onClick={() => { setEmail('alice@example.com'); setPassword('password123'); }} style={{ flex: 1, padding: '4px', fontSize: '0.75rem', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', color: '#fff', cursor: 'pointer' }}>Alice 입력</button>
+                  <button type="button" onClick={() => { setEmail('bob@example.com'); setPassword('password123'); }} style={{ flex: 1, padding: '4px', fontSize: '0.75rem', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', color: '#fff', cursor: 'pointer' }}>Bob 입력</button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.7)', textAlign: 'left' }}>이메일</label>
+                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={{ padding: '6px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', color: '#fff', fontSize: '0.85rem' }} required />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.7)', textAlign: 'left' }}>비밀번호</label>
+                  <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={{ padding: '6px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', color: '#fff', fontSize: '0.85rem' }} required />
+                </div>
+                <button type="submit" disabled={loginLoading} className="submit-btn" style={{ marginTop: '5px', padding: '8px', cursor: 'pointer' }}>
+                  {loginLoading ? '로그인 중...' : '🔑 로그인 (POST /auth/login)'}
+                </button>
+              </form>
+            )}
+          </div>
+
+          <div>
+            <div className="panel-header">
               <div className="panel-title">🎮 주문 시뮬레이터</div>
             </div>
             <form className="simulator-form" onSubmit={handleSubmit}>
               <div className="form-group">
                 <label>주문 요청 고객</label>
-                <select className="form-select" value={userId} onChange={(e) => setUserId(e.target.value)}>
-                  <option value="1">Alice (ID: 1)</option>
-                  <option value="2">Bob (ID: 2)</option>
-                  <option value="999">Charlie (ID: 999 - 미등록 고객)</option>
-                </select>
+                {user ? (
+                  <div style={{ padding: '10px', background: 'rgba(0, 242, 254, 0.1)', borderRadius: '4px', border: '1px solid rgba(0, 242, 254, 0.3)', color: '#fff', fontSize: '0.9rem', fontWeight: 'bold', textAlign: 'center' }}>
+                    👤 {user.name} (ID: {user.id}) - 인증됨 🔑
+                  </div>
+                ) : (
+                  <>
+                    <select className="form-select" value={userId} onChange={(e) => setUserId(e.target.value)}>
+                      <option value="1">Alice (ID: 1 - 비인증)</option>
+                      <option value="2">Bob (ID: 2 - 비인증)</option>
+                      <option value="999">Charlie (ID: 999 - 미등록 고객)</option>
+                    </select>
+                    <div style={{ fontSize: '0.75rem', color: '#ff5252', marginTop: '4px', textAlign: 'left' }}>
+                      ⚠️ 로그인하지 않고 주문 시 Gateway에서 HTTP 401 에러를 반환합니다.
+                    </div>
+                  </>
+                )}
               </div>
               <div className="form-group">
                 <label>상품 선택</label>

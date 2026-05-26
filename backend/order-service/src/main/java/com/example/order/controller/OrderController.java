@@ -7,6 +7,7 @@ import com.example.order.repository.OrderRepository;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.HashMap;
@@ -47,8 +48,16 @@ public class OrderController {
     }
 
     @PostMapping("/orders")
-    public Map<String, Object> createOrder(@RequestBody Map<String, Object> request) {
-        Long userId = Long.valueOf(request.get("userId").toString());
+    public Map<String, Object> createOrder(
+        @RequestHeader(value = "X-User-Id", required = false) String xUserId,
+        @RequestBody Map<String, Object> request
+    ) {
+        Long userId;
+        if (xUserId != null && !xUserId.isEmpty()) {
+            userId = Long.valueOf(xUserId);
+        } else {
+            userId = Long.valueOf(request.get("userId").toString());
+        }
         String item = request.get("item").toString();
         
         OrderEntity orderEntity = new OrderEntity(item, userId);

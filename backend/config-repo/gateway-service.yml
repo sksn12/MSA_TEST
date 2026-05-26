@@ -5,18 +5,28 @@ spring:
   cloud:
     gateway:
       routes:
+        - id: auth-service
+          uri: lb://AUTH-SERVICE
+          predicates:
+            - Path=/auth/**
         - id: user-service
           uri: lb://USER-SERVICE
           predicates:
             - Path=/users/**
+          filters:
+            - JwtAuthenticationFilter
         - id: order-service
           uri: lb://ORDER-SERVICE
           predicates:
             - Path=/orders/**
+          filters:
+            - JwtAuthenticationFilter
         - id: delivery-service
           uri: lb://DELIVERY-SERVICE
           predicates:
             - Path=/deliveries/**
+          filters:
+            - JwtAuthenticationFilter
 
 eureka:
   client:
@@ -24,3 +34,6 @@ eureka:
     fetch-registry: true
     service-url:
       defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka/}
+
+jwt:
+  secret: my-super-secret-key-that-must-be-at-least-256-bits-long-for-hmac-sha

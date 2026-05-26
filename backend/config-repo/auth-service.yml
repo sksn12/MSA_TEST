@@ -1,0 +1,23 @@
+server:
+  port: 3004
+
+spring:
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connectTimeout: 5000
+            readTimeout: 5000
+
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka/}
+
+# JWT Configuration
+jwt:
+  secret: my-super-secret-key-that-must-be-at-least-256-bits-long-for-hmac-sha
+  expiration: 86400000 # 24 hours in milliseconds

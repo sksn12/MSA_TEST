@@ -56,6 +56,20 @@ services:
     networks:
       - msa-network
 
+  auth-service:
+    build: ./auth-service
+    expose:
+      - "3004"
+    environment:
+      - CONFIG_SERVER_URL=http://config-service:8888
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-service:8761/eureka/
+    depends_on:
+      - discovery-service
+      - config-service
+      - user-service
+    networks:
+      - msa-network
+
   order-service:
     build: ./order-service
     expose:
@@ -97,6 +111,7 @@ services:
       - discovery-service
       - config-service
       - user-service
+      - auth-service
       - order-service
       - delivery-service
     networks:
