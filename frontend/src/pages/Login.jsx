@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 
 function Login({ onLoginSuccess }) {
-  const [email, setEmail] = useState('alice@example.com');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const navigate = useNavigate();
@@ -56,10 +56,6 @@ function Login({ onLoginSuccess }) {
         )}
 
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button type="button" onClick={() => { setEmail('alice@example.com'); setPassword('password123'); }} style={{ flex: 1, padding: '8px', fontSize: '0.8rem', background: 'rgba(0, 242, 254, 0.1)', border: '1px solid rgba(0, 242, 254, 0.2)', borderRadius: '6px', color: 'var(--accent-cyan)', cursor: 'pointer', fontWeight: 'bold' }}>Alice 입력</button>
-            <button type="button" onClick={() => { setEmail('bob@example.com'); setPassword('password123'); }} style={{ flex: 1, padding: '8px', fontSize: '0.8rem', background: 'rgba(0, 242, 254, 0.1)', border: '1px solid rgba(0, 242, 254, 0.2)', borderRadius: '6px', color: 'var(--accent-cyan)', cursor: 'pointer', fontWeight: 'bold' }}>Bob 입력</button>
-          </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <label style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', textAlign: 'left' }}>이메일 주소</label>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={{ padding: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#fff', fontSize: '0.9rem' }} required />
