@@ -6,6 +6,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
+      '/auth': 'http://localhost:8080',
       '/users': 'http://localhost:8080',
       '/orders': 'http://localhost:8080',
       '/deliveries': 'http://localhost:8080',
