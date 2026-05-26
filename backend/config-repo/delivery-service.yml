@@ -16,10 +16,6 @@ spring:
     properties:
       hibernate:
         format_sql: true
-
-logging:
-  level:
-    org.hibernate.SQL: debug
   kafka:
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
     consumer:
@@ -29,6 +25,10 @@ logging:
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: "*"
+
+logging:
+  level:
+    org.hibernate.SQL: debug
 
 eureka:
   client:

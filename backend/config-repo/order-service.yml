@@ -14,10 +14,6 @@ spring:
     properties:
       hibernate:
         format_sql: true
-
-logging:
-  level:
-    org.hibernate.SQL: debug
   cloud:
     openfeign:
       circuitbreaker:
@@ -27,6 +23,10 @@ logging:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+logging:
+  level:
+    org.hibernate.SQL: debug
 
 
 eureka:
